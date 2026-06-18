@@ -44,6 +44,68 @@ class FamilyApiService {
     return _post('/api/families', {'name': name}, token: token);
   }
 
+  Future<Map<String, dynamic>> getMe({required String token}) {
+    return _get('/api/me', token: token);
+  }
+
+  Future<Map<String, dynamic>> listFamilies({required String token}) {
+    return _get('/api/families', token: token);
+  }
+
+  Future<Map<String, dynamic>> getFamily({
+    required String token,
+    required String familyId,
+  }) {
+    return _get('/api/families/$familyId', token: token);
+  }
+
+  Future<Map<String, dynamic>> getFamilyNotes({
+    required String token,
+    required String familyId,
+  }) {
+    return _get('/api/families/$familyId/notes', token: token);
+  }
+
+  Future<Map<String, dynamic>> getComments({
+    required String token,
+    required String familyId,
+    required String noteId,
+  }) {
+    return _get('/api/families/$familyId/notes/$noteId/comments', token: token);
+  }
+
+  Future<Map<String, dynamic>> addComment({
+    required String token,
+    required String familyId,
+    required String noteId,
+    required String body,
+  }) {
+    return _post(
+      '/api/families/$familyId/notes/$noteId/comments',
+      {'body': body},
+      token: token,
+    );
+  }
+
+  Future<Map<String, dynamic>> getFamilyActivity({
+    required String token,
+    required String familyId,
+  }) {
+    return _get('/api/families/$familyId/activity', token: token);
+  }
+
+  Future<Map<String, dynamic>> registerDevice({
+    required String token,
+    required String platform,
+    required String pushToken,
+  }) {
+    return _post(
+      '/api/devices',
+      {'platform': platform, 'pushToken': pushToken},
+      token: token,
+    );
+  }
+
   Future<Map<String, dynamic>> joinFamily({
     required String token,
     required String inviteCode,
@@ -112,6 +174,29 @@ class FamilyApiService {
         if (token != null) 'authorization': 'Bearer $token',
       },
       body: jsonEncode(body),
+    );
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode >= 400) {
+      throw FamilyApiException(
+        decoded['error']?.toString() ?? 'Request failed',
+        response.statusCode,
+      );
+    }
+
+    return decoded;
+  }
+
+  Future<Map<String, dynamic>> _get(
+    String path, {
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl$path'),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $token',
+      },
     );
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;

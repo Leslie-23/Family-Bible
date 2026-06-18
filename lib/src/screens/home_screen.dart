@@ -7,6 +7,7 @@ import '../models/bible_version_model.dart';
 import '../models/verse_model.dart';
 import '../providers/last_index_provider.dart';
 import '../providers/annotation_provider.dart';
+import '../providers/connectivity_provider.dart';
 import '../providers/scroll_controller_provider.dart';
 import '../providers/selected_verses_provider.dart';
 import '../providers/verse_provider.dart';
@@ -21,6 +22,8 @@ import '../services/verse_services.dart';
 // import '../widgets/ad_banner_view.dart';
 import '../widgets/bible_view.dart';
 import '../widgets/home_dashboard.dart';
+import '../widgets/ux_states.dart';
+import 'family_screen.dart';
 import 'notes_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
@@ -121,6 +124,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final bibleVersion = ref.watch(versionProvider);
     final annotations = ref.watch(annotationProvider).values.toList();
+    final isOnline = ref.watch(connectivityProvider).value ?? true;
     final noteCount =
         annotations.where((annotation) => annotation.hasNote).length;
     final highlightCount =
@@ -269,24 +273,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
           ],
         ),
-        body: versesState.when(
-          data: (data) => _buildSelectedTab(
-            verses: data,
-            lastIndex: lastIndex,
-            noteCount: noteCount,
-            highlightCount: highlightCount,
-          ),
-          error: (error, stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(error.toString()),
+        body: Column(
+          children: [
+            if (!isOnline) const OfflineBanner(),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: versesState.when(
+                  data: (data) => _buildSelectedTab(
+                    verses: data,
+                    lastIndex: lastIndex,
+                    noteCount: noteCount,
+                    highlightCount: highlightCount,
+                  ),
+                  error: (error, stackTrace) => ErrorStateView(
+                    error: error,
+                    onRetry: _init,
+                  ),
+                  loading: () => const VerseShimmerList(),
+                ),
+              ),
             ),
-          ),
-          loading: () => const Center(
-            child: CircularProgressIndicator(
-              strokeCap: StrokeCap.round,
-            ),
-          ),
+          ],
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _selectedTab,
@@ -316,6 +324,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               selectedIcon: Icon(Icons.tune_rounded),
               label: 'Settings',
             ),
+            NavigationDestination(
+              icon: Icon(Icons.family_restroom_outlined),
+              selectedIcon: Icon(Icons.family_restroom_rounded),
+              label: 'Family',
+            ),
           ],
         ),
       ),
@@ -327,6 +340,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       0 => 'Home',
       2 => 'Notes',
       3 => 'Settings',
+      4 => 'Family',
       _ => '',
     };
   }
@@ -350,6 +364,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onOpenNotes: () {
             setState(() => _selectedTab = 2);
           },
+          onOpenFamily: () {
+            setState(() => _selectedTab = 4);
+          },
           onOpenVerse: (index) {
             ref.read(lastIndexProvider.notifier).state = index;
             setState(() => _selectedTab = 1);
@@ -361,6 +378,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       1 => BibleView(verses),
       2 => NotesScreen(verses: verses, showAppBar: false),
       3 => const SettingsScreen(showAppBar: false),
+      4 => const FamilyScreen(showAppBar: false),
       _ => BibleView(verses),
     };
   }

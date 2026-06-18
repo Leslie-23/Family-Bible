@@ -8,6 +8,7 @@ import '../providers/annotation_provider.dart';
 import '../providers/scroll_controller_provider.dart';
 import '../providers/version_provider.dart';
 import '../utils/highlight_color_util.dart';
+import '../widgets/ux_states.dart';
 import '../widgets/verse_action_sheet.dart';
 
 class NotesScreen extends ConsumerWidget {
@@ -148,15 +149,11 @@ class _AnnotationList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (annotations.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'No saved notes or highlights yet.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-        ),
+      return const EmptyStateView(
+        icon: Icons.sticky_note_2_outlined,
+        title: 'No notes yet',
+        body:
+            'Tap any verse to add a note or highlight. Your family reflections will appear here.',
       );
     }
 

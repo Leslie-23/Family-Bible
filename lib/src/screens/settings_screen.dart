@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_settings.dart';
 import '../providers/annotation_provider.dart';
 import '../providers/settings_provider.dart';
+import 'family_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   final bool showAppBar;
@@ -151,6 +152,29 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.palette_outlined),
             title: const Text('Highlights'),
             trailing: Text('$highlightCount'),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Family',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.family_restroom_rounded),
+            title: const Text('Manage family'),
+            subtitle: const Text('Invites, members, notes, and activity'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const FamilyScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),

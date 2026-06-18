@@ -11,6 +11,7 @@ class HomeDashboard extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onContinueReading;
   final VoidCallback onOpenNotes;
+  final VoidCallback onOpenFamily;
   final ValueChanged<int> onOpenVerse;
 
   const HomeDashboard({
@@ -22,6 +23,7 @@ class HomeDashboard extends StatelessWidget {
     required this.onSearch,
     required this.onContinueReading,
     required this.onOpenNotes,
+    required this.onOpenFamily,
     required this.onOpenVerse,
   });
 
@@ -148,6 +150,16 @@ class HomeDashboard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.family_restroom_rounded),
+            title: const Text('My Family'),
+            subtitle: const Text('Create or join a family group'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onOpenFamily,
+          ),
         ),
       ],
     );

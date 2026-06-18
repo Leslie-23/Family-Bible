@@ -6,6 +6,7 @@ import '../databases/bible_database.dart';
 import '../models/verse_model.dart';
 import '../providers/scroll_controller_provider.dart';
 import '../utils/text_utils.dart';
+import '../widgets/ux_states.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   final List<Verse> verses;
@@ -296,32 +297,39 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              itemCount: filteredResult.length,
-              itemBuilder: (context, index) {
-                Verse verse = filteredResult[index];
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Theme.of(context).hoverColor),
-                    ),
-                  ),
-                  child: ListTile(
-                    onTap: () {
-                      _jumpToVerse(verse);
+            child: filteredResult.isEmpty && _searchController.text.isNotEmpty
+                ? const EmptyStateView(
+                    icon: Icons.search_off_rounded,
+                    title: 'No matching verses',
+                    body: 'Try a shorter word, a book name, or a verse phrase.',
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: filteredResult.length,
+                    itemBuilder: (context, index) {
+                      Verse verse = filteredResult[index];
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom:
+                                BorderSide(color: Theme.of(context).hoverColor),
+                          ),
+                        ),
+                        child: ListTile(
+                          onTap: () {
+                            _jumpToVerse(verse);
+                          },
+                          title: TextUtils.search(
+                              input: verse.text.trim(),
+                              text: _searchController.text.trim(),
+                              context: context),
+                          subtitle: Text(
+                              "${verse.book} ${verse.chapter}:${verse.verse}"),
+                        ),
+                      );
                     },
-                    title: TextUtils.search(
-                        input: verse.text.trim(),
-                        text: _searchController.text.trim(),
-                        context: context),
-                    subtitle:
-                        Text("${verse.book} ${verse.chapter}:${verse.verse}"),
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),

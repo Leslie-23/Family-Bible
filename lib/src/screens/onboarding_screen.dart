@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/family_bible_config.dart';
 import '../models/local_user.dart';
 import '../providers/local_user_provider.dart';
+import '../services/family_api_service.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -16,14 +17,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   int _page = 0;
+  bool _loginMode = false;
+  bool _submitting = false;
 
   @override
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -63,6 +68,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     formKey: _formKey,
                     nameController: _nameController,
                     emailController: _emailController,
+                    passwordController: _passwordController,
+                    loginMode: _loginMode,
+                    submitting: _submitting,
+                    onToggleMode: () {
+                      setState(() => _loginMode = !_loginMode);
+                    },
                     onGoogle: () => _showComingSoon('Google sign-in'),
                     onApple: () => _showComingSoon('Apple sign-in'),
                     onContinue: _finishWithNativeAccount,
@@ -122,12 +133,50 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _finishWithNativeAccount() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    await ref.read(localUserProvider.notifier).saveUser(
-          LocalUser(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
+    setState(() => _submitting = true);
+    try {
+      final api = FamilyApiService();
+      final result = _loginMode
+          ? await api.login(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            )
+          : await api.register(
+              name: _nameController.text.trim(),
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            );
+      final user = result['user'] as Map<String, dynamic>;
+      await ref.read(localUserProvider.notifier).saveUser(
+            LocalUser(
+              id: user['id']?.toString(),
+              name: user['name']?.toString() ?? _nameController.text.trim(),
+              email: user['email']?.toString() ?? _emailController.text.trim(),
+              token: result['token']?.toString(),
+              brandingName: user['brandingName']?.toString(),
+            ),
+          );
+    } on FamilyApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.statusCode == 409
+                ? 'That email already exists. Switch to sign in.'
+                : error.message,
           ),
-        );
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not connect. Check your connection or skip.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _showComingSoon(String provider) async {
@@ -202,6 +251,10 @@ class _NativeAuthPage extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController nameController;
   final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final bool loginMode;
+  final bool submitting;
+  final VoidCallback onToggleMode;
   final VoidCallback onGoogle;
   final VoidCallback onApple;
   final VoidCallback onContinue;
@@ -210,6 +263,10 @@ class _NativeAuthPage extends StatelessWidget {
     required this.formKey,
     required this.nameController,
     required this.emailController,
+    required this.passwordController,
+    required this.loginMode,
+    required this.submitting,
+    required this.onToggleMode,
     required this.onGoogle,
     required this.onApple,
     required this.onContinue,
@@ -222,7 +279,7 @@ class _NativeAuthPage extends StatelessWidget {
       children: [
         const SizedBox(height: 24),
         Text(
-          'Set up your native account',
+          loginMode ? 'Welcome back' : 'Set up your native account',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -267,21 +324,24 @@ class _NativeAuthPage extends StatelessWidget {
           key: formKey,
           child: Column(
             children: [
-              TextFormField(
-                controller: nameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
+              if (!loginMode) ...[
+                TextFormField(
+                  controller: nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (loginMode) return null;
+                    if ((value ?? '').trim().length < 2) {
+                      return 'Enter your name';
+                    }
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  if ((value ?? '').trim().length < 2) {
-                    return 'Enter your name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -298,13 +358,42 @@ class _NativeAuthPage extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 16),
+              TextFormField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if ((value ?? '').length < 8) {
+                    return 'Use at least 8 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: onContinue,
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const Text('Continue native'),
+                onPressed: submitting ? null : onContinue,
+                icon: submitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(loginMode
+                        ? Icons.login_rounded
+                        : Icons.person_add_alt_1_rounded),
+                label: Text(loginMode ? 'Sign in' : 'Create account'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                 ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: submitting ? null : onToggleMode,
+                child: Text(loginMode
+                    ? 'Need an account? Create one'
+                    : 'Already have an account? Sign in'),
               ),
             ],
           ),

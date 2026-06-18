@@ -39,12 +39,10 @@ class VerseItem extends ConsumerWidget {
                 child: Text(
                   verse.book,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize:
-                        Theme.of(context).textTheme.displayLarge?.fontSize!,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ),
             ],

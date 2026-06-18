@@ -8,6 +8,7 @@ import '../models/verse_model.dart';
 import '../providers/annotation_provider.dart';
 import '../providers/version_provider.dart';
 import '../utils/highlight_color_util.dart';
+import 'ux_states.dart';
 
 class VerseActionSheet extends ConsumerStatefulWidget {
   final Verse verse;
@@ -105,9 +106,7 @@ class _VerseActionSheetState extends ConsumerState<VerseActionSheet> {
                         ref.read(annotationProvider.notifier).save(
                               annotation.copyWith(note: ''),
                             );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Note cleared')),
-                        );
+                        ThemedSnackBar.success(context, 'Note cleared');
                       },
                       icon: const Icon(Icons.delete_outline_rounded),
                       label: const Text('Clear'),
@@ -120,9 +119,7 @@ class _VerseActionSheetState extends ConsumerState<VerseActionSheet> {
                               note: _noteController.text.trim(),
                             ),
                           );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Note saved')),
-                      );
+                      ThemedSnackBar.success(context, 'Note saved');
                     },
                     icon: const Icon(Icons.check_rounded),
                     label: const Text('Save note'),
@@ -172,9 +169,7 @@ class _VerseActionSheetState extends ConsumerState<VerseActionSheet> {
                     onPressed: () {
                       final text = _verseText(version.title);
                       Clipboard.setData(ClipboardData(text: text));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Verse copied')),
-                      );
+                      ThemedSnackBar.success(context, 'Verse copied');
                     },
                   ),
                   ActionChip(
