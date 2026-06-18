@@ -21,30 +21,65 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   final List<Verse> _results = [];
+  final List<Verse> _suggestions = [];
 
   // Method to perform the search
   Future<void> search() async {
-    setState(() {
-      _results.clear();
-    });
+    final query =
+        _searchController.text.trim().replaceAll(" ", "").toLowerCase();
+    if (query.isEmpty) {
+      setState(() {
+        _results.clear();
+      });
+      return;
+    }
+
+    final results = <Verse>[];
 
     for (var verse in widget.verses) {
       // Matching verses based on the trimmed and lowercase text
-      bool matchVerse = verse.text
-          .trim()
-          .replaceAll(" ", "")
-          .toLowerCase()
-          .contains(
-              _searchController.text.trim().replaceAll(" ", "").toLowerCase());
+      bool matchVerse =
+          verse.text.trim().replaceAll(" ", "").toLowerCase().contains(query);
       if (matchVerse) {
-        bool contains = _results.any((element) => element == verse);
+        bool contains = results.any((element) => element == verse);
         if (!contains) {
-          setState(() {
-            _results.add(verse);
-          });
+          results.add(verse);
         }
       }
     }
+
+    setState(() {
+      _results
+        ..clear()
+        ..addAll(results);
+    });
+  }
+
+  void _updateSuggestions(String value) {
+    final query = value.trim().replaceAll(" ", "").toLowerCase();
+    if (query.isEmpty) {
+      setState(() => _suggestions.clear());
+      return;
+    }
+
+    final matches = <Verse>[];
+    for (final verse in widget.verses) {
+      final normalized = verse.text.trim().replaceAll(" ", "").toLowerCase();
+      final reference =
+          '${verse.book}${verse.chapter}${verse.verse}'.toLowerCase();
+
+      if (normalized.contains(query) || reference.contains(query)) {
+        matches.add(verse);
+      }
+
+      if (matches.length == 6) break;
+    }
+
+    setState(() {
+      _suggestions
+        ..clear()
+        ..addAll(matches);
+    });
   }
 
   String _selectedBook = "All";
@@ -108,7 +143,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             border: InputBorder.none,
             hintText: "Search",
           ),
-          onChanged: (o) => setState(() {}),
+          onChanged: _updateSuggestions,
           onSubmitted: (s) async =>
               await search().then((_) => _scrollController.jumpTo(0.0)),
           textInputAction: TextInputAction.search,
@@ -126,6 +161,37 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
       body: Column(
         children: [
+          if (_suggestions.isNotEmpty)
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _suggestions.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+                itemBuilder: (context, index) {
+                  final verse = _suggestions[index];
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.manage_search_rounded),
+                    title: Text(
+                      verse.text.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      "${verse.book} ${verse.chapter}:${verse.verse}",
+                    ),
+                    onTap: () {
+                      _jumpToVerse(verse);
+                    },
+                  );
+                },
+              ),
+            ),
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: SizedBox(
@@ -244,14 +310,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                   child: ListTile(
                     onTap: () {
-                      int idx = widget.verses.indexWhere(
-                        (element) =>
-                            element.chapter == verse.chapter &&
-                            element.book == verse.book &&
-                            element.verse == verse.verse,
-                      );
-                      ScrollControllerProvider.jumpTo(ref: ref, index: idx);
-                      Navigator.pop(context);
+                      _jumpToVerse(verse);
                     },
                     title: TextUtils.search(
                         input: verse.text.trim(),
@@ -267,5 +326,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ],
       ),
     );
+  }
+
+  void _jumpToVerse(Verse verse) {
+    int idx = widget.verses.indexWhere(
+      (element) =>
+          element.chapter == verse.chapter &&
+          element.book == verse.book &&
+          element.verse == verse.verse,
+    );
+    ScrollControllerProvider.jumpTo(ref: ref, index: idx);
+    Navigator.pop(context);
   }
 }

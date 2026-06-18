@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +6,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../models/bible_version_model.dart';
 import '../models/verse_model.dart';
 import '../providers/last_index_provider.dart';
+import '../providers/annotation_provider.dart';
 import '../providers/scroll_controller_provider.dart';
 import '../providers/selected_verses_provider.dart';
 import '../providers/verse_provider.dart';
@@ -20,7 +20,10 @@ import '../services/user_action_services.dart';
 import '../services/verse_services.dart';
 // import '../widgets/ad_banner_view.dart';
 import '../widgets/bible_view.dart';
+import '../widgets/home_dashboard.dart';
+import 'notes_screen.dart';
 import 'search_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -30,6 +33,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  int _selectedTab = 0;
+
   Future<void> _init() async {
     await fetchCachedData(ref: ref);
 
@@ -48,8 +53,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 .value
                 .toList();
 
-            final first = positions
+            if (positions.isEmpty) return;
+
+            final visiblePositions = positions
                 .where((ItemPosition position) => position.itemTrailingEdge > 0)
+                .toList();
+
+            if (visiblePositions.isEmpty) return;
+
+            final first = visiblePositions
                 .reduce((ItemPosition min, ItemPosition position) =>
                     position.itemTrailingEdge < min.itemTrailingEdge
                         ? position
@@ -72,9 +84,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 firstVerseInViewPort.chapter != previousActiveVerse.chapter) {
               if (!ref.read(versionChangedProvider)) {
                 ref.read(lastIndexProvider.notifier).state = firstIndex;
-                } else {
-                  ref.read(versionChangedProvider.notifier).state = false;
-                }
+              } else {
+                ref.read(versionChangedProvider.notifier).state = false;
+              }
               _activeVerse = firstVerseInViewPort;
             }
           },
@@ -108,6 +120,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isVerseSelected = selected.isNotEmpty;
 
     final bibleVersion = ref.watch(versionProvider);
+    final annotations = ref.watch(annotationProvider).values.toList();
+    final noteCount =
+        annotations.where((annotation) => annotation.hasNote).length;
+    final highlightCount =
+        annotations.where((annotation) => annotation.hasHighlight).length;
+    final lastIndex = ref.watch(lastIndexProvider);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -119,8 +137,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       child: Scaffold(
         appBar: AppBar(
-          title: versesLoaded == false
-              ? null
+          title: _selectedTab != 1 || versesLoaded == false
+              ? Text(_appBarTitle)
               : Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24.0),
@@ -158,7 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
           actions: [
-            if (isVerseSelected && versesLoaded)
+            if (_selectedTab == 1 && isVerseSelected && versesLoaded)
               IconButton(
                 onPressed: () {
                   verseServices.copy(selected);
@@ -167,7 +185,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Icons.copy_rounded,
                 ),
               ),
-            if (isVerseSelected && versesLoaded)
+            if (_selectedTab == 1 && isVerseSelected && versesLoaded)
               IconButton(
                 onPressed: () {
                   verseServices.share(selected);
@@ -176,7 +194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Icons.share_rounded,
                 ),
               ),
-            if (!isVerseSelected && versesLoaded)
+            if (_selectedTab == 1 && !isVerseSelected && versesLoaded)
               IconButton(
                 onPressed: () {
                   Navigator.push(
@@ -192,7 +210,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Icons.search_rounded,
                 ),
               ),
-            if (!isVerseSelected && versesLoaded)
+            if (_selectedTab == 1 && !isVerseSelected && versesLoaded)
+              IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => NotesScreen(verses: verses),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.sticky_note_2_outlined,
+                ),
+              ),
+            if (_selectedTab == 1 && !isVerseSelected && versesLoaded)
+              IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.tune_rounded,
+                ),
+              ),
+            if (_selectedTab == 1 && !isVerseSelected && versesLoaded)
               PopupMenuButton(
                 menuPadding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
@@ -223,27 +269,109 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
           ],
         ),
-        body: Column(
-          children: [
-            // const AdBannerView(),
-            Expanded(
-              child: versesState.when(
-                data: (data) => BibleView(data),
-                error: (error, stackTrace) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(error.toString()),
-                  ),
-                ),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(
-                    strokeCap: StrokeCap.round,
-                  ),
-                ),
-              ),
+        body: versesState.when(
+          data: (data) => _buildSelectedTab(
+            verses: data,
+            lastIndex: lastIndex,
+            noteCount: noteCount,
+            highlightCount: highlightCount,
+          ),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(error.toString()),
+            ),
+          ),
+          loading: () => const Center(
+            child: CircularProgressIndicator(
+              strokeCap: StrokeCap.round,
+            ),
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedTab,
+          onDestinationSelected: (index) {
+            setState(() {
+              _selectedTab = index;
+            });
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.menu_book_outlined),
+              selectedIcon: Icon(Icons.menu_book_rounded),
+              label: 'Read',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.sticky_note_2_outlined),
+              selectedIcon: Icon(Icons.sticky_note_2_rounded),
+              label: 'Notes',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.tune_outlined),
+              selectedIcon: Icon(Icons.tune_rounded),
+              label: 'Settings',
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String get _appBarTitle {
+    return switch (_selectedTab) {
+      0 => 'Home',
+      2 => 'Notes',
+      3 => 'Settings',
+      _ => '',
+    };
+  }
+
+  Widget _buildSelectedTab({
+    required List<Verse> verses,
+    required int lastIndex,
+    required int noteCount,
+    required int highlightCount,
+  }) {
+    return switch (_selectedTab) {
+      0 => HomeDashboard(
+          verses: verses,
+          currentIndex: lastIndex,
+          noteCount: noteCount,
+          highlightCount: highlightCount,
+          onSearch: () => _openSearch(verses),
+          onContinueReading: () {
+            setState(() => _selectedTab = 1);
+          },
+          onOpenNotes: () {
+            setState(() => _selectedTab = 2);
+          },
+          onOpenVerse: (index) {
+            ref.read(lastIndexProvider.notifier).state = index;
+            setState(() => _selectedTab = 1);
+            Future.delayed(const Duration(milliseconds: 80), () {
+              ScrollControllerProvider.jumpTo(ref: ref, index: index);
+            });
+          },
+        ),
+      1 => BibleView(verses),
+      2 => NotesScreen(verses: verses, showAppBar: false),
+      3 => const SettingsScreen(showAppBar: false),
+      _ => BibleView(verses),
+    };
+  }
+
+  void _openSearch(List<Verse> verses) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) {
+          return SearchScreen(verses);
+        },
       ),
     );
   }

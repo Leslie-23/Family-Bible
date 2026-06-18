@@ -11,6 +11,8 @@ class BibleDatabase {
   final BibleVersion version;
   BibleDatabase(this.version);
 
+  static final Map<String, List<Verse>> _verseCache = {};
+
   static List<BibleVersion> bibleVersions = [
     BibleVersion(title: "King James", path: "assets/kjv.json"),
     BibleVersion(title: "American Standard", path: "assets/asv.json"),
@@ -112,6 +114,11 @@ class BibleDatabase {
 
   Future<Either<String, List<Verse>>> getVerses() async {
     try {
+      final cached = _verseCache[version.path];
+      if (cached != null) {
+        return Right(cached);
+      }
+
       List<Verse> verses = [];
 
       String jsonString = await rootBundle.loadString(version.path);
@@ -133,6 +140,8 @@ class BibleDatabase {
           }
         }
       });
+
+      _verseCache[version.path] = verses;
 
       return Right(verses);
     } catch (e) {
