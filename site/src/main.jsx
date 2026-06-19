@@ -20,6 +20,8 @@ import './styles.css';
 
 const updatedDate = 'June 18, 2026';
 const apiBaseUrl = 'https://server-pi-five-58.vercel.app';
+const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.family_bible';
+const testerOptInUrl = 'https://play.google.com/apps/testing/com.family_bible';
 
 function App() {
   const path = window.location.pathname;
@@ -61,7 +63,7 @@ function Header() {
         <a href="/#features" onClick={() => setMobileOpen(false)}>Features</a>
         <a href="/#family" onClick={() => setMobileOpen(false)}>Family</a>
         <a href="/privacy" onClick={() => setMobileOpen(false)}>Privacy</a>
-        <a className="nav-cta" href="#download" onClick={() => setMobileOpen(false)}>
+        <a className="nav-cta" href={testerOptInUrl} onClick={() => setMobileOpen(false)}>
           <Download size={15} />
           Get the app
         </a>
@@ -91,13 +93,13 @@ function Home() {
             and help your family stay rooted in the Word.
           </p>
           <div className="hero-actions" id="download">
-            <a className="button primary" href="#">
+            <a className="button primary" href={playStoreUrl}>
               <Download size={18} />
               Download for Android
             </a>
-            <a className="button secondary" href="#">
+            <a className="button secondary" href={testerOptInUrl}>
               <Download size={18} />
-              Download for iOS
+              Join the test
             </a>
           </div>
           <div className="trust-row" aria-label="Key features">
@@ -244,14 +246,14 @@ function Home() {
       <section className="cta-section">
         <div className="cta-inner">
           <h2>Start reading together.</h2>
-          <p>Download Family Bible free on Android and iOS.</p>
+          <p>Download Family Bible free on Android, or join the testing track.</p>
           <div className="hero-actions">
-            <a className="button primary inverted" href="#">
+            <a className="button primary inverted" href={testerOptInUrl}>
               <Download size={18} />
-              Download now
+              Join testing
             </a>
-            <a className="button secondary inverted" href="/privacy">
-              Privacy policy
+            <a className="button secondary inverted" href={playStoreUrl}>
+              View Play Store
             </a>
           </div>
         </div>
