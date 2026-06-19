@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../providers/family_provider.dart';
 import '../providers/local_user_provider.dart';
+import 'onboarding_screen.dart';
 import '../widgets/ux_states.dart';
 
 class FamilyScreen extends ConsumerStatefulWidget {
@@ -53,8 +54,8 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
                 title: 'Sign in to use Family',
                 body:
                     'Family notes, comments, invites, and reading check-ins need an account.',
-                actionLabel: 'Use onboarding sign-in',
-                onAction: () {},
+                actionLabel: 'Sign in or create account',
+                onAction: _openSignIn,
               )
             else if (family.loading && family.families.isEmpty)
               const Padding(
@@ -75,6 +76,7 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
                 family: family.selectedFamily ?? family.families.first,
                 notes: family.notes,
                 activity: family.activity,
+                commentsByNote: family.commentsByNote,
                 onCreate: _createFamily,
                 onJoin: _joinFamily,
               ),
@@ -119,6 +121,22 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
     await ref.read(familyProvider.notifier).joinFamily(code.trim());
   }
 
+  Future<void> _openSignIn() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const OnboardingScreen(
+          initialPage: 2,
+          popOnComplete: true,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    if (ref.read(localUserProvider).isAuthenticated) {
+      await ref.read(familyProvider.notifier).loadFamilies();
+    }
+  }
+
   Future<String?> _inputDialog({
     required String title,
     required String label,
@@ -153,10 +171,11 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
   }
 }
 
-class _FamilyDetails extends StatelessWidget {
+class _FamilyDetails extends ConsumerWidget {
   final Map<String, dynamic> family;
   final List<Map<String, dynamic>> notes;
   final List<Map<String, dynamic>> activity;
+  final Map<String, List<Map<String, dynamic>>> commentsByNote;
   final VoidCallback onCreate;
   final VoidCallback onJoin;
 
@@ -164,101 +183,451 @@ class _FamilyDetails extends StatelessWidget {
     required this.family,
     required this.notes,
     required this.activity,
+    required this.commentsByNote,
     required this.onCreate,
     required this.onJoin,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final code = family['inviteCode']?.toString() ?? '';
     final members = (family['members'] as List? ?? []);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Card(
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.primary,
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  family['name']?.toString() ?? 'Family',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+            padding: const EdgeInsets.all(18),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: colorScheme.onPrimary),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    family['name']?.toString() ?? 'Family',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: colorScheme.onPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${members.length} member${members.length == 1 ? '' : 's'} reading together',
+                    style: TextStyle(
+                      color: colorScheme.onPrimary.withOpacity(0.78),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.onPrimary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: colorScheme.onPrimary.withOpacity(0.2),
                       ),
-                ),
-                const SizedBox(height: 10),
-                InputChip(
-                  avatar: const Icon(Icons.key_rounded),
-                  label: Text(code),
-                  onPressed: () {
-                    Share.share(
-                      'Join my family on Family Bible! Use invite code: $code\n\nOr tap: familybible://invite/$code',
-                    );
-                  },
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: onJoin,
-                      icon: const Icon(Icons.group_add_rounded),
-                      label: const Text('Join'),
                     ),
-                    const SizedBox(width: 10),
-                    FilledButton.icon(
-                      onPressed: onCreate,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('New'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.key_rounded),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Invite code',
+                                  style: TextStyle(
+                                    color:
+                                        colorScheme.onPrimary.withOpacity(0.72),
+                                  ),
+                                ),
+                                SelectableText(
+                                  code,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    color: colorScheme.onPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton.filledTonal(
+                            tooltip: 'Share invite',
+                            onPressed: () {
+                              Share.share(
+                                'Join my family on Family Bible! Use invite code: $code\n\nOr tap: familybible://invite/$code',
+                              );
+                            },
+                            icon: const Icon(Icons.ios_share_rounded),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: onJoin,
+                          icon: const Icon(Icons.group_add_rounded),
+                          label: const Text('Join another'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: onCreate,
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('New family'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        Text('Members', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Expanded(
+              child: _StatTile(
+                icon: Icons.people_alt_rounded,
+                value: members.length.toString(),
+                label: 'Members',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatTile(
+                icon: Icons.sticky_note_2_rounded,
+                value: notes.length.toString(),
+                label: 'Shared notes',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text('Members', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        ...members.map((member) {
-          final user = member is Map ? member['userId'] : null;
-          final name = user is Map ? user['name']?.toString() : 'Member';
-          return ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
-            title: Text(name ?? 'Member'),
-            subtitle:
-                Text(member is Map ? member['role']?.toString() ?? '' : ''),
-          );
-        }),
-        const SizedBox(height: 16),
-        Text('Family Notes', style: Theme.of(context).textTheme.titleMedium),
+        Card(
+          child: Column(
+            children: members.map((member) {
+              final user = member is Map ? member['userId'] : null;
+              final name = user is Map ? user['name']?.toString() : 'Member';
+              final email = user is Map ? user['email']?.toString() : null;
+              final role = member is Map ? member['role']?.toString() : '';
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: colorScheme.primaryContainer,
+                  child: Text(
+                    (name == null || name.isEmpty ? 'M' : name[0])
+                        .toUpperCase(),
+                    style: TextStyle(
+                      color: colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                title: Text(name ?? 'Member'),
+                subtitle: Text([
+                  if (role != null && role.isNotEmpty) role,
+                  if (email != null && email.isNotEmpty) email,
+                ].join(' · ')),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text('Shared Family Notes', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         if (notes.isEmpty)
-          const Text('No shared family notes yet.')
+          const EmptyStateView(
+            icon: Icons.forum_outlined,
+            title: 'No shared notes yet',
+            body:
+                'Open a verse, write a note or highlight it, then tap Share with family.',
+          )
         else
-          ...notes.take(6).map((note) => ListTile(
-                leading: const Icon(Icons.sticky_note_2_outlined),
-                title:
-                    Text('${note['book']} ${note['chapter']}:${note['verse']}'),
-                subtitle: Text(
-                  note['note']?.toString() ?? '',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )),
-        const SizedBox(height: 16),
-        Text('Activity', style: Theme.of(context).textTheme.titleMedium),
+          ...notes.map(
+            (note) {
+              final noteId = note['_id']?.toString() ?? '';
+              return _SharedNoteCard(
+                note: note,
+                comments: commentsByNote[noteId] ?? const [],
+              );
+            },
+          ),
+        const SizedBox(height: 20),
+        Text('Recent Activity', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         if (activity.isEmpty)
-          const Text('No family reading activity yet.')
+          const EmptyStateView(
+            icon: Icons.bolt_outlined,
+            title: 'No reading activity yet',
+            body:
+                'Reading check-ins and shared notes will appear here once your family starts using the app.',
+          )
         else
-          ...activity.take(8).map((item) => ListTile(
-                leading: const Icon(Icons.bolt_rounded),
-                title: Text(item['event']?.toString() ?? 'activity'),
-                subtitle: Text(item['createdAt']?.toString() ?? ''),
-              )),
+          Card(
+            child: Column(
+              children: activity.take(8).map((item) {
+                final user = item['userId'];
+                final name = user is Map ? user['name']?.toString() : null;
+                final event = item['event']?.toString() ?? 'activity';
+                final createdAt = _friendlyDate(item['createdAt']?.toString());
+                return ListTile(
+                  leading: Icon(_activityIcon(event)),
+                  title: Text(_activityTitle(event, name)),
+                  subtitle: Text(createdAt),
+                );
+              }).toList(),
+            ),
+          ),
       ],
     );
+  }
+
+  IconData _activityIcon(String event) {
+    return switch (event) {
+      'read' => Icons.menu_book_rounded,
+      'note' => Icons.sticky_note_2_rounded,
+      'comment' => Icons.chat_bubble_rounded,
+      'highlight' => Icons.format_color_fill_rounded,
+      _ => Icons.bolt_rounded,
+    };
+  }
+
+  String _activityTitle(String event, String? name) {
+    final who = name == null || name.isEmpty ? 'Someone' : name;
+    return switch (event) {
+      'read' => '$who checked in',
+      'note' => '$who shared a note',
+      'comment' => '$who commented',
+      'highlight' => '$who shared a highlight',
+      _ => '$who had activity',
+    };
+  }
+
+  String _friendlyDate(String? value) {
+    if (value == null || value.isEmpty) return '';
+    final date = DateTime.tryParse(value);
+    if (date == null) return value;
+    final local = date.toLocal();
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _StatTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(icon, color: colorScheme.primary),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                Text(label),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SharedNoteCard extends ConsumerStatefulWidget {
+  final Map<String, dynamic> note;
+  final List<Map<String, dynamic>> comments;
+
+  const _SharedNoteCard({
+    required this.note,
+    required this.comments,
+  });
+
+  @override
+  ConsumerState<_SharedNoteCard> createState() => _SharedNoteCardState();
+}
+
+class _SharedNoteCardState extends ConsumerState<_SharedNoteCard> {
+  final TextEditingController _commentController = TextEditingController();
+  bool _expanded = false;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final note = widget.note;
+    final author = note['authorId'];
+    final authorName = author is Map ? author['name']?.toString() : null;
+    final noteId = note['_id']?.toString() ?? '';
+    final reference = '${note['book']} ${note['chapter']}:${note['verse']}';
+    final body = note['note']?.toString() ?? '';
+    final verseText = note['verseText']?.toString() ?? '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    reference,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                Text(authorName == null ? 'Shared' : 'by $authorName'),
+              ],
+            ),
+            if (verseText.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                verseText,
+                maxLines: _expanded ? null : 3,
+                overflow: _expanded ? null : TextOverflow.ellipsis,
+              ),
+            ],
+            if (body.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(body),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () async {
+                    setState(() => _expanded = !_expanded);
+                    if (!_expanded || widget.comments.isNotEmpty) return;
+                    await ref.read(familyProvider.notifier).loadComments(noteId);
+                  },
+                  icon: Icon(
+                    _expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.mode_comment_outlined,
+                  ),
+                  label: Text(
+                    _expanded
+                        ? 'Hide comments'
+                        : '${widget.comments.length} comments',
+                  ),
+                ),
+              ],
+            ),
+            if (_expanded) ...[
+              const Divider(),
+              if (widget.comments.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('No comments yet. Start the conversation.'),
+                )
+              else
+                ...widget.comments.map((comment) {
+                  final commentAuthor = comment['authorId'];
+                  final commentName = commentAuthor is Map
+                      ? commentAuthor['name']?.toString()
+                      : 'Member';
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      radius: 16,
+                      child: Icon(Icons.person_rounded, size: 16),
+                    ),
+                    title: Text(commentName ?? 'Member'),
+                    subtitle: Text(comment['body']?.toString() ?? ''),
+                  );
+                }),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _commentController,
+                minLines: 1,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: 'Add a family comment',
+                  suffixIcon: IconButton(
+                    onPressed: _sending ? null : () => _sendComment(noteId),
+                    icon: _sending
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendComment(String noteId) async {
+    final body = _commentController.text.trim();
+    if (body.isEmpty) return;
+    setState(() => _sending = true);
+    await ref.read(familyProvider.notifier).addComment(
+          noteId: noteId,
+          body: body,
+        );
+    _commentController.clear();
+    if (mounted) setState(() => _sending = false);
   }
 }

@@ -1,4 +1,4 @@
-package com.the_word.eijiotieno
+package com.family_bible
 
 import io.flutter.embedding.android.FlutterActivity
 

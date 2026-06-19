@@ -7,21 +7,36 @@ import '../providers/local_user_provider.dart';
 import '../services/family_api_service.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key});
+  final int initialPage;
+  final bool popOnComplete;
+
+  const OnboardingScreen({
+    super.key,
+    this.initialPage = 0,
+    this.popOnComplete = false,
+  });
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final PageController _pageController = PageController();
+  late final PageController _pageController;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  int _page = 0;
+  late int _page;
   bool _loginMode = false;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = widget.initialPage.clamp(0, 2);
+    _pageController = PageController(initialPage: _page);
+    _loginMode = widget.initialPage >= 2;
+  }
 
   @override
   void dispose() {
@@ -128,6 +143,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _finishWithoutAccount() async {
     await ref.read(localUserProvider.notifier).completeOnboarding();
+    if (!mounted) return;
+    if (widget.popOnComplete && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _finishWithNativeAccount() async {
@@ -156,6 +175,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               brandingName: user['brandingName']?.toString(),
             ),
           );
+      if (!mounted) return;
+      if (widget.popOnComplete && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
     } on FamilyApiException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -202,7 +202,7 @@ class SettingsScreen extends ConsumerWidget {
 
   Color _paletteColor(AppPalette palette) {
     return switch (palette) {
-      AppPalette.parchment => const Color(0xFF8B5E34),
+      AppPalette.parchment => const Color(0xFF6E4F30),
       AppPalette.forest => const Color(0xFF3F6F57),
       AppPalette.slate => const Color(0xFF586F7C),
       AppPalette.ocean => const Color(0xFF1D6F8A),

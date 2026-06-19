@@ -5,6 +5,8 @@ import 'package:share_plus/share_plus.dart';
 import '../models/verse_annotation.dart';
 import '../models/verse_model.dart';
 import '../providers/annotation_provider.dart';
+import '../providers/family_provider.dart';
+import '../providers/local_user_provider.dart';
 import '../providers/scroll_controller_provider.dart';
 import '../providers/version_provider.dart';
 import '../utils/highlight_color_util.dart';
@@ -164,6 +166,8 @@ class _AnnotationList extends ConsumerWidget {
       itemBuilder: (context, index) {
         final annotation = annotations[index];
         final verse = _verseFor(annotation);
+        final localUser = ref.watch(localUserProvider);
+        final family = ref.watch(familyProvider);
 
         return Card(
           child: InkWell(
@@ -237,15 +241,43 @@ class _AnnotationList extends ConsumerWidget {
                     ),
                   ],
                   const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        Share.share(_shareText(annotation, verse));
-                      },
-                      icon: const Icon(Icons.share_rounded),
-                      label: const Text('Share'),
-                    ),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          Share.share(_shareText(annotation, verse));
+                        },
+                        icon: const Icon(Icons.ios_share_rounded),
+                        label: const Text('Share out'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: verse == null ||
+                                !localUser.isAuthenticated ||
+                                family.loading
+                            ? null
+                            : () => _shareWithFamily(
+                                  context: context,
+                                  ref: ref,
+                                  verse: verse,
+                                  annotation: annotation,
+                                ),
+                        icon: family.loading
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.family_restroom_rounded),
+                        label: Text(
+                          !localUser.isAuthenticated
+                              ? 'Sign in to share'
+                              : 'Share with family',
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -275,6 +307,29 @@ class _AnnotationList extends ConsumerWidget {
     final note = annotation.hasNote ? '\n\nNote: ${annotation.note}' : '';
 
     return '$reference$text$note';
+  }
+
+  Future<void> _shareWithFamily({
+    required BuildContext context,
+    required WidgetRef ref,
+    required Verse verse,
+    required VerseAnnotation annotation,
+  }) async {
+    try {
+      final version = ref.read(versionProvider);
+      await ref.read(familyProvider.notifier).shareAnnotation(
+            verse: verse,
+            versionTitle: version.title,
+            annotation: annotation,
+          );
+      if (!context.mounted) return;
+      ThemedSnackBar.success(context, 'Shared with your family');
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
   }
 }
 

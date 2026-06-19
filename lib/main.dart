@@ -109,8 +109,26 @@ class _AppBootstrapState extends ConsumerState<_AppBootstrap> {
   }
 
   ThemeData _buildTheme(AppPalette palette, Brightness brightness) {
+    const brandEspresso = Color(0xFF6E4F30);
+    const brandEspressoDeep = Color(0xFF5E4226);
+    const brandGold = Color(0xFFC59A41);
+    const brandTerracotta = Color(0xFFB0613C);
+    const lightCanvas = Color(0xFFEFE6D5);
+    const lightPaper = Color(0xFFFBF6EC);
+    const lightSunken = Color(0xFFF3E9D6);
+    const lightBorder = Color(0xFFE4D9C4);
+    const lightInk = Color(0xFF2A2420);
+    const lightBody = Color(0xFF33302A);
+    const lightMuted = Color(0xFF7C715F);
+    const darkCanvas = Color(0xFF1F1A15);
+    const darkSurface = Color(0xFF2A241D);
+    const darkRaised = Color(0xFF342D24);
+    const darkBorder = Color(0xFF3B332A);
+    const darkInk = Color(0xFFF2E9DA);
+    const darkMuted = Color(0xFFA99A82);
+
     final seed = switch (palette) {
-      AppPalette.parchment => const Color(0xFF6E4F30),
+      AppPalette.parchment => brandEspresso,
       AppPalette.forest => const Color(0xFF3F6F57),
       AppPalette.slate => const Color(0xFF586F7C),
       AppPalette.ocean => const Color(0xFF1D6F8A),
@@ -119,30 +137,85 @@ class _AppBootstrapState extends ConsumerState<_AppBootstrap> {
       AppPalette.graphite => const Color(0xFF52565A),
     };
     final background = switch ((palette, brightness)) {
-      (AppPalette.parchment, Brightness.light) => const Color(0xFFF5F0E8),
+      (AppPalette.parchment, Brightness.light) => lightCanvas,
       (AppPalette.forest, Brightness.light) => const Color(0xFFF5FAF6),
       (AppPalette.slate, Brightness.light) => const Color(0xFFF5F8FA),
       (AppPalette.ocean, Brightness.light) => const Color(0xFFF2FAFC),
       (AppPalette.plum, Brightness.light) => const Color(0xFFFCF6FA),
       (AppPalette.ember, Brightness.light) => const Color(0xFFFFF7F1),
       (AppPalette.graphite, Brightness.light) => const Color(0xFFF7F7F5),
+      (AppPalette.parchment, Brightness.dark) => darkCanvas,
       (_, Brightness.dark) => const Color(0xFF111412),
     };
 
-    final colorScheme = ColorScheme.fromSeed(
+    final generatedScheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
     );
+    final colorScheme = palette == AppPalette.parchment
+        ? (brightness == Brightness.light
+            ? const ColorScheme.light(
+                primary: brandEspresso,
+                onPrimary: lightPaper,
+                primaryContainer: lightSunken,
+                onPrimaryContainer: brandEspressoDeep,
+                secondary: brandGold,
+                onSecondary: Color(0xFF43301A),
+                secondaryContainer: Color(0xFFE9CD8F),
+                onSecondaryContainer: Color(0xFF43301A),
+                tertiary: brandTerracotta,
+                onTertiary: lightPaper,
+                tertiaryContainer: Color(0xFFE7C4B2),
+                onTertiaryContainer: Color(0xFF4A2417),
+                surface: lightPaper,
+                onSurface: lightInk,
+                surfaceContainerHighest: lightSunken,
+                onSurfaceVariant: lightMuted,
+                outline: Color(0xFFB3A793),
+                outlineVariant: lightBorder,
+                error: Color(0xFF9B3D32),
+                onError: lightPaper,
+              )
+            : const ColorScheme.dark(
+                primary: Color(0xFFD6AE5C),
+                onPrimary: Color(0xFF43301A),
+                primaryContainer: darkRaised,
+                onPrimaryContainer: darkInk,
+                secondary: brandGold,
+                onSecondary: Color(0xFF43301A),
+                secondaryContainer: Color(0xFF4A4133),
+                onSecondaryContainer: Color(0xFFE9CD8F),
+                tertiary: Color(0xFFCC8E6A),
+                onTertiary: Color(0xFF2A130C),
+                tertiaryContainer: Color(0xFF4A2B20),
+                onTertiaryContainer: Color(0xFFE7C4B2),
+                surface: darkSurface,
+                onSurface: darkInk,
+                surfaceContainerHighest: darkRaised,
+                onSurfaceVariant: darkMuted,
+                outline: Color(0xFF6E6353),
+                outlineVariant: darkBorder,
+                error: Color(0xFFFFB4A9),
+                onError: Color(0xFF5F150F),
+              ))
+        : generatedScheme;
     final baseTheme = ThemeData(
       brightness: brightness,
       colorScheme: colorScheme,
     );
-    final textColor = brightness == Brightness.light
-        ? const Color(0xFF3B2F2F)
+    final isParchment = palette == AppPalette.parchment;
+    final textColor = isParchment
+        ? (brightness == Brightness.light ? lightBody : darkInk)
         : colorScheme.onSurface;
-    final displayColor = brightness == Brightness.light
-        ? const Color(0xFF5C4033)
+    final displayColor = isParchment
+        ? (brightness == Brightness.light ? lightInk : darkInk)
         : colorScheme.primary;
+    final mutedColor = isParchment
+        ? (brightness == Brightness.light ? lightMuted : darkMuted)
+        : colorScheme.onSurfaceVariant;
+    final sunkenColor = isParchment
+        ? (brightness == Brightness.light ? lightSunken : darkRaised)
+        : colorScheme.surfaceContainerHighest;
     final textTheme = _buildTextTheme(
       baseTheme.textTheme,
       textColor: textColor,
@@ -169,17 +242,109 @@ class _AppBootstrapState extends ConsumerState<_AppBootstrap> {
         elevation: 0,
         backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
       ),
       cardTheme: CardTheme(
         elevation: 0,
+        color: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
-      listTileTheme: const ListTileThemeData(
-        contentPadding: EdgeInsets.symmetric(horizontal: 16),
+      dividerTheme: DividerThemeData(
+        color: colorScheme.outlineVariant,
+        thickness: 1,
+        space: 1,
+      ),
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        iconColor: colorScheme.primary,
+        textColor: colorScheme.onSurface,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: sunkenColor,
+        selectedColor: colorScheme.primary,
+        disabledColor: sunkenColor.withOpacity(0.62),
+        side: BorderSide(color: colorScheme.outlineVariant),
+        labelStyle: TextStyle(color: mutedColor),
+        secondaryLabelStyle: TextStyle(color: colorScheme.onPrimary),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: sunkenColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+        ),
+        hintStyle: TextStyle(color: mutedColor),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+          disabledBackgroundColor: sunkenColor,
+          disabledForegroundColor: mutedColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colorScheme.primary,
+          side: BorderSide(color: colorScheme.primary, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: mutedColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: colorScheme.primary,
+          backgroundColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: colorScheme.primaryContainer,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? colorScheme.primary : mutedColor,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return textTheme.labelMedium?.copyWith(
+            color: selected ? colorScheme.primary : mutedColor,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          );
+        }),
       ),
     );
   }

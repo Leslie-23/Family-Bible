@@ -25,7 +25,7 @@ class UserActionServices {
   }
 
   static Future<void> inviteFriend() async {
-    const String appLink = 'https://play.google.com/store/apps/details?id=com.the_word.eijiotieno&pcampaignid=web_share';
+    const String appLink = 'https://play.google.com/store/apps/details?id=com.family_bible&pcampaignid=web_share';
     const String message = '''
                       I’ve been using this amazing app and thought you might love it too. It’s a great way to dive deeper into God’s word and stay connected.You can download it here: $appLink
                         ''';

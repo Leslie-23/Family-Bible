@@ -13,7 +13,17 @@ const env = (key) => process.env[key]?.trim();
 app.use(express.json({ limit: '1mb' }));
 app.use(
   cors({
-    origin: env('APP_ORIGIN') === '*' ? true : env('APP_ORIGIN'),
+    origin(origin, callback) {
+      const configured = env('APP_ORIGIN');
+      if (!origin || !configured || configured === '*') {
+        return callback(null, true);
+      }
+      const allowed = (configured || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      return callback(null, allowed.includes(origin));
+    },
     credentials: true,
   }),
 );
@@ -174,9 +184,40 @@ const deviceSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+const deletionRequestSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, lowercase: true, trim: true },
+    name: { type: String, trim: true },
+    reason: { type: String, trim: true },
+    requestType: {
+      type: String,
+      enum: ['account', 'data'],
+      default: 'account',
+    },
+    dataTypes: [
+      {
+        type: String,
+        enum: ['notes', 'highlights', 'comments', 'reading_activity', 'devices'],
+      },
+    ],
+    status: {
+      type: String,
+      enum: ['requested', 'completed', 'rejected'],
+      default: 'requested',
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    requestedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true },
+);
+
 noteSchema.index({ familyId: 1, verseKey: 1, authorId: 1 }, { unique: true });
 activitySchema.index({ familyId: 1, userId: 1, createdAt: -1 });
 deviceSchema.index({ userId: 1, pushToken: 1 }, { unique: true });
+deletionRequestSchema.index({ email: 1, status: 1 });
 
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 const Family =
@@ -188,6 +229,9 @@ const Activity =
   mongoose.models.Activity || mongoose.model('Activity', activitySchema);
 const Device =
   mongoose.models.Device || mongoose.model('Device', deviceSchema);
+const DeletionRequest =
+  mongoose.models.DeletionRequest ||
+  mongoose.model('DeletionRequest', deletionRequestSchema);
 
 function tokenFor(user) {
   const jwtSecret = env('JWT_SECRET');
@@ -250,6 +294,46 @@ function publicUser(user) {
     lastReadAt: user.lastReadAt,
     lastReadVerse: user.lastReadVerse,
   };
+}
+
+async function deleteAccountData(userId) {
+  const id = userId.toString();
+  const userObjectId = new mongoose.Types.ObjectId(id);
+  const authoredNotes = await Note.find({ authorId: userObjectId })
+    .select('_id familyId')
+    .lean();
+  const noteIds = authoredNotes.map((note) => note._id);
+
+  await Comment.deleteMany({
+    $or: [{ authorId: userObjectId }, { noteId: { $in: noteIds } }],
+  });
+  await Note.deleteMany({ authorId: userObjectId });
+  await Activity.deleteMany({ userId: userObjectId });
+  await Device.deleteMany({ userId: userObjectId });
+
+  const families = await Family.find({ 'members.userId': userObjectId });
+  for (const family of families) {
+    family.members = family.members.filter(
+      (member) => member.userId.toString() !== id,
+    );
+
+    if (family.members.length === 0) {
+      await Comment.deleteMany({ familyId: family._id });
+      await Note.deleteMany({ familyId: family._id });
+      await Activity.deleteMany({ familyId: family._id });
+      await Family.deleteOne({ _id: family._id });
+      continue;
+    }
+
+    if (family.ownerId.toString() === id) {
+      family.ownerId = family.members[0].userId;
+      family.members[0].role = 'owner';
+    }
+
+    await family.save();
+  }
+
+  await User.deleteOne({ _id: userObjectId });
 }
 
 app.get('/', (req, res) => {
@@ -326,6 +410,69 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/me', requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
+});
+
+app.delete('/api/me', requireAuth, async (req, res) => {
+  await deleteAccountData(req.user._id);
+  res.json({ ok: true, message: 'Account and associated data deleted' });
+});
+
+async function createDeletionRequest(req, res, fallbackType = 'account') {
+  await connect();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const name = String(req.body.name || '').trim();
+  const reason = String(req.body.reason || '').trim();
+  const requestType =
+    req.body.requestType === 'data' || fallbackType === 'data'
+      ? 'data'
+      : 'account';
+  const allowedDataTypes = new Set([
+    'notes',
+    'highlights',
+    'comments',
+    'reading_activity',
+    'devices',
+  ]);
+  const dataTypes = Array.isArray(req.body.dataTypes)
+    ? req.body.dataTypes.filter((type) => allowedDataTypes.has(type))
+    : [];
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'A valid email is required' });
+  }
+
+  const user = await User.findOne({ email }).select('_id name email').lean();
+  const request = await DeletionRequest.findOneAndUpdate(
+    { email, requestType, status: 'requested' },
+    {
+      email,
+      name: name || user?.name || '',
+      reason,
+      requestType,
+      dataTypes,
+      userId: user?._id,
+      requestedAt: new Date(),
+      status: 'requested',
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+
+  res.status(202).json({
+    ok: true,
+    requestId: request._id,
+    message:
+      requestType === 'account'
+        ? 'Account deletion request received. We will process associated account data for this email.'
+        : 'Data deletion request received. We will process the requested data for this email.',
+  });
+}
+
+app.post('/api/account-deletion-requests', async (req, res) => {
+  return createDeletionRequest(req, res, 'account');
+});
+
+app.post('/api/data-deletion-requests', async (req, res) => {
+  return createDeletionRequest(req, res, 'data');
 });
 
 app.post('/api/families', requireAuth, async (req, res) => {
